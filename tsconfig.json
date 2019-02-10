@@ -4,6 +4,9 @@
       "es2017"
     ],
     "moduleResolution": "node",
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "sourceMap": true,

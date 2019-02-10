@@ -1,4 +1,4 @@
-const debug = require('debug')('bot')
+const debug = require('debug')('telegram-bot')
 
 import * as request from 'request-promise'
 import { APIGatewayProxyHandler } from 'aws-lambda'
@@ -22,21 +22,26 @@ const ok: ResponseFn = (body = true) => ({
   body: JSON.stringify(body),
 });
 
-const genHash = (): string => Math.random().toString(36).substring(3, 7)
+function generateHash(): string {
+  return Math.random().toString(36).substring(3, 7)
   + Math.random().toString(36).substring(3, 7)
+}
 
 const notes: {[userId: string]: {[hash: string]: string}} = {}
-const addNote = (userId: number, note: string) => {
+
+function addNote(userId: number, note: string): void {
   if (!notes[userId]) notes[userId] = {}
 
-  const hash = genHash();
+  const hash = generateHash();
   if (notes[userId][hash]) return addNote(userId, note);
   notes[userId][hash] = note;
 }
 
 const token = process.env.TELEGRAM_TOKEN
 
-const buildUrl = (method) => `https://api.telegram.org/bot${token}/${method}`
+function buildUrl(method: string): string {
+  return `https://api.telegram.org/bot${token}/${method}`
+}
 
 const requestOptions = {
   method: 'POST',
@@ -44,13 +49,13 @@ const requestOptions = {
   resolveWithFullResponse: true,
   forever: true,
 }
-const buildOptions = (method, form) => ({
+const buildOptions = (method: string, form: any) => ({
   ...requestOptions,
   url: buildUrl(method),
   form,
 })
 
-const makeRequest = (method, form) => {
+const makeRequest = (method: string, form: any) => {
   const opts = buildOptions(method, form)
   if (form.reply_markup) form.reply_markup = JSON.stringify(form.reply_markup)
   if (form.results) form.results = JSON.stringify(form.results)
@@ -67,7 +72,7 @@ const makeRequest = (method, form) => {
     })
 }
 
-const sendMessage = (chatId, text) => {
+const sendMessage = (chatId: number, text: string) => {
   const form: SendMessage = {
     chat_id: chatId,
     text,
@@ -109,7 +114,7 @@ const sendMessage = (chatId, text) => {
   return makeRequest('sendMessage', form)
 }
 
-const answerCallbackQuery = (cbId, text) => {
+const answerCallbackQuery = (cbId: string, text: string) => {
   const form: AnswerCallbackQuery = {
     callback_query_id: cbId,
     text,
@@ -118,7 +123,7 @@ const answerCallbackQuery = (cbId, text) => {
   return makeRequest('answerCallbackQuery', form)
 }
 
-const answerInlineQuery = (iqId, results: InlineQueryResult[]) => {
+const answerInlineQuery = (iqId: string, results: InlineQueryResult[]) => {
   const form: AnswerInlineQuery = {
     inline_query_id: iqId,
     cache_time: 10,
@@ -135,9 +140,9 @@ const handleCallbackQuery = (callbackQuery: CallbackQuery) => {
   const resp = (callbackData === 'add' ? 'was added' : 'was ignored')
 
   if (callbackData === 'add') {
-    debug('callbackQuery')
-    debug(callbackQuery)
-    addNote(callbackQuery.from.id, callbackQuery.message.text)
+    if (callbackQuery.message && callbackQuery.message.text) {
+      addNote(callbackQuery.from.id, callbackQuery.message.text)
+    }
   }
 
   return answerCallbackQuery(callbackQuery.id, `Your note ${resp}`)
@@ -163,7 +168,7 @@ const handleInlineQuery = (inlineQuery: InlineQuery) => {
 }
 
 const handleTextMessage = (message: Message) => {
-  return sendMessage(message.chat.id, message.text)
+  return sendMessage(message.chat.id, message.text || 'empty_message')
 }
 
 const updateHandler = (update: Update) => {
@@ -171,13 +176,23 @@ const updateHandler = (update: Update) => {
     return handleCallbackQuery(update.callback_query)
   } else if (update.inline_query) {
     return handleInlineQuery(update.inline_query)
-  } else {
+  } else if (update.message) {
     return handleTextMessage(update.message)
+  } else {
+    debug(`Not handled: ${update.update_id}`)
+    return Promise.resolve();
   }
 }
 
 export const handler: APIGatewayProxyHandler = async (event, context) => {
-  const update = JSON.parse(event.body) as Update
+  let update = null
+  try {
+    update = JSON.parse(event.body || '') as Update
+  } catch (err) {
+    debug('Could not parse')
+    throw err
+  }
+
   debug(context.functionName, context.functionVersion)
 
   await updateHandler(update);
