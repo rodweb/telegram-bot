@@ -3,6 +3,17 @@ const debug = require('debug')('bot')
 import * as request from 'request-promise'
 import { APIGatewayProxyHandler } from 'aws-lambda'
 
+import {
+  Update,
+  Message,
+  SendMessage,
+  CallbackQuery,
+  AnswerCallbackQuery,
+  InlineQuery,
+  InlineQueryResult,
+  AnswerInlineQuery,
+} from './types'
+
 type Response = { statusCode: number, body: string }
 type ResponseFn = (body?: any) => Response
 
@@ -10,159 +21,6 @@ const ok: ResponseFn = (body = true) => ({
   statusCode: 200,
   body: JSON.stringify(body),
 });
-
-interface User {
-  id: number,
-  is_bot: boolean,
-  first_name: string,
-  last_name?: string,
-  username?: string
-  language_code?: string
-}
-
-interface Chat {
-  id: number,
-  type: 'private' | 'group' | 'supergroup' | 'channel',
-  title?: string,
-  username?: string,
-  first_name: string,
-  last_name?: string,
-}
-
-interface MessageEntity {}
-
-interface Audio {}
-interface Document {}
-interface PhotoSize {}
-interface Video {}
-interface Voice {}
-interface Location {}
-interface Contact {}
-
-interface Message {
-  message_id: number,
-  from: User,
-  date: number,
-  chat: Chat,
-  forward_from?: User,
-  forward_from_chat?: Chat,
-  forward_from_message_id?: number,
-  forward_signature?: string,
-  forward_date?: number,
-  reply_to_message?: Message,
-  edit_date?: number,
-  media_group_id?: string
-  author_signature?: string,
-  text?: string,
-  entities?: Array<MessageEntity>,
-  caption_entities?: Array<MessageEntity>,
-  audio?: Audio,
-  document?: Document,
-  // animation?: Animation,
-  // game?: Game,
-  photo?: Array<PhotoSize>,
-  // sticker?: Sticker,
-  video?: Video,
-  voice?: Voice,
-  // video_note?: VideoNote,
-  caption?: string,
-  contact?: Contact,
-  location?: Location,
-}
-
-interface InlineQuery {
-  id: string,
-  from: User,
-  location?: Location,
-  query: string,
-  offset: string,
-}
-interface InputTextMessageContent {
-  message_text: string,
-  parse_mode?: 'Markdown' | 'HTML',
-  disable_web_page_preview?: boolean
-}
-type InputMessageContent = InputTextMessageContent
-interface InlineQueryResultArticle {
-  type: 'article',
-  id: string,
-  title: string,
-  input_message_content: InputMessageContent,
-  reply_markup?: InlineKeyboardMarkup,
-  url?: string
-  hide_url?: boolean
-  description?: string
-}
-type InlineQueryResult = InlineQueryResultArticle
-interface ChosenInlineResult {}
-interface CallbackQuery {
-  id: string,
-  from: User,
-  message?: Message,
-  inline_message_id?: string
-  chat_instance: string,
-  data?: string,
-  game_short_name?: string
-}
-
-interface Update {
-  update_id: number,
-  message?: Message,
-  edited_message?: Message,
-  channel_post?: Message,
-  edited_channel_post?: Message,
-  inline_query?: InlineQuery,
-  chosen_inline_result?: ChosenInlineResult,
-  callback_query?: CallbackQuery,
-}
-
-interface InlineKeyboardMarkup {
-  text: string,
-  url?: string,
-  callback_data?: string
-}
-interface InlineKeyboardMarkup {
-  inline_keyboard: InlineKeyboardMarkup[][]
-}
-interface KeyboardButton {
-  text: string,
-  request_contact?: boolean,
-  request_location?: boolean
-}
-interface ReplyKeyboardMarkup {
-  keyboard: KeyboardButton[][],
-  resize_keyboard?: boolean,
-  one_time_keyboard?: boolean,
-  selective?: boolean
-}
-interface ReplyKeyboardRemove {}
-interface ForceReply {}
-
-interface SendMessage {
-  chat_id?: number | string,
-  text: string,
-  parse_mode?: 'Markdown' | 'HTML',
-  disable_web_page_preview?: boolean,
-  disable_notification?: boolean,
-  replay_to_message_id?: number,
-  reply_markup?: InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove | ForceReply
-}
-
-interface AnswerCallbackQuery {
-  callback_query_id: string,
-  text?: string,
-  show_alert?: boolean,
-  url?: string,
-  cache_time?: number,
-}
-
-interface AnswerInlineQuery {
-  inline_query_id: string,
-  results: InlineQueryResult[],
-  cache_time?: number,
-  is_personal?: boolean,
-  next_offset?: string,
-}
 
 const genHash = (): string => Math.random().toString(36).substring(3, 7)
   + Math.random().toString(36).substring(3, 7)
