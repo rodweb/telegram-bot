@@ -1,2 +1,2 @@
-import { InlineQueryResultArticle } from './input-message-types'
+import { InlineQueryResultArticle } from './inline-query-result-types'
 export type InlineQueryResult = InlineQueryResultArticle

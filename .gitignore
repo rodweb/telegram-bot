@@ -7,3 +7,10 @@ jspm_packages
 
 # Webpack directories
 .webpack
+
+# Editor directories
+.idea
+.vscode
+
+# Ctags
+tags

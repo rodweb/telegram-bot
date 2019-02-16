@@ -5,6 +5,10 @@ service:
 plugins:
   - serverless-webpack
   - serverless-offline
+  # - serverless-plugin-typescript
+
+custom:
+  bucket: telegram-bot-development
 
 provider:
   name: aws
@@ -12,7 +16,23 @@ provider:
   environment:
     TELEGRAM_TOKEN: ${env:TELEGRAM_TOKEN}
     DEBUG: "*"
-
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+    BUCKET: ${self:custom.bucket}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:GetObject
+      Resource: "arn:aws:s3:::${self:custom.bucket}/*"
 functions:
   receive-updates:
     handler: handler.handler
@@ -21,3 +41,22 @@ functions:
           method: post
           path: telegram-hook
           cors: true
+
+resources:
+  Resources:
+    PetsTable:
+      Type: AWS::DynamoDB::Table
+      # DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}

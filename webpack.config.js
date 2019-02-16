@@ -12,6 +12,10 @@ module.exports = {
   entry: entries,
   devtool: 'source-map',
   resolve: {
+    alias: {
+      // 'node-fetch$': "node-fetch/lib/index.js",
+      'sandwich-stream$': "sandwich-stream/dist/sandwich-stream.js"
+    },
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
   },
   output: {
@@ -24,6 +28,7 @@ module.exports = {
     rules: [
       // all files with a `.ts` or `.tsx` extension will be handled by `ts-loader`
       { test: /\.tsx?$/, loader: 'ts-loader' },
+
     ],
-  },
+  }
 };

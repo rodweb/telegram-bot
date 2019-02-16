@@ -1,201 +1,118 @@
-const debug = require('debug')('telegram-bot')
+// const tableName = process.env.DYNAMODB_TABLE as string;
 
-import * as request from 'request-promise'
-import { APIGatewayProxyHandler } from 'aws-lambda'
+// const dynamoDb = new AWS.DynamoDB.DocumentClient()
 
-import {
-  Update,
-  Message,
-  SendMessage,
-  CallbackQuery,
-  AnswerCallbackQuery,
-  InlineQuery,
-  InlineQueryResult,
-  AnswerInlineQuery,
-} from './types'
+// async function getNote(id: string) {
+//   const params = {
+//     TableName: tableName,
+//     Key: {
+//       id,
+//     }
+//   }
 
-type Response = { statusCode: number, body: string }
-type ResponseFn = (body?: any) => Response
+//   const result = await dynamoDb.get(params).promise()
+//   if (result) {
+//     return result.Item && result.Item.text;
+//   }
 
-const ok: ResponseFn = (body = true) => ({
-  statusCode: 200,
-  body: JSON.stringify(body),
-});
+//   return null;
+// }
 
-function generateHash(): string {
-  return Math.random().toString(36).substring(3, 7)
-  + Math.random().toString(36).substring(3, 7)
+// async function addNote(userId: number, text: string): Promise<string> {
+//   const timestamp = new Date().getTime()
+//   const id = uuid.v1()
+
+//   const params = {
+//     TableName: tableName,
+//     Item: {
+//       type: 'nma/text',
+//       id,
+//       userId,
+//       text,
+//       createdAt: timestamp,
+//       updatedAt: timestamp,
+//     },
+//   };
+
+//   // write the pet to the database
+//   await dynamoDb.put(params).promise();
+
+//   return id
+// }
+
+import * as t from 'telegraf'
+import * as AWS from 'aws-sdk'
+import { Response } from 'node-fetch';
+import { APIGatewayProxyHandler } from 'aws-lambda';
+import * as f from 'node-fetch'
+import { Markup } from 'telegraf';
+import * as d from 'debug'
+
+const token = process.env.TELEGRAM_TOKEN || ''
+const bucket = process.env.BUCKET || ''
+
+const s3 = new AWS.S3()
+const debug = d('telegram-bot')
+const Telegraf = t.default;
+const bot = new Telegraf(token)
+const fetch = f.default
+
+const debugMiddleware: t.Middleware<t.ContextMessageUpdate> = (ctx, next) => {
+  if (next) {
+    return next().then(() => {
+      debug(ctx.update)
+    })
+  }
 }
+bot.use(debugMiddleware)
 
-const notes: {[userId: string]: {[hash: string]: string}} = {}
-
-function addNote(userId: number, note: string): void {
-  if (!notes[userId]) notes[userId] = {}
-
-  const hash = generateHash();
-  if (notes[userId][hash]) return addNote(userId, note);
-  notes[userId][hash] = note;
-}
-
-const token = process.env.TELEGRAM_TOKEN
-
-function buildUrl(method: string): string {
-  return `https://api.telegram.org/bot${token}/${method}`
-}
-
-const requestOptions = {
-  method: 'POST',
-  simple: false,
-  resolveWithFullResponse: true,
-  forever: true,
-}
-const buildOptions = (method: string, form: any) => ({
-  ...requestOptions,
-  url: buildUrl(method),
-  form,
+bot.use(ctx => {
+  if (ctx.from && ctx.from.username !== 'rodwebr') {
+    return ctx.reply(`I'm not allowed to chat with you :(\nPlease talk to @rodwebr`)
+  }
+  return
 })
 
-const makeRequest = (method: string, form: any) => {
-  const opts = buildOptions(method, form)
-  if (form.reply_markup) form.reply_markup = JSON.stringify(form.reply_markup)
-  if (form.results) form.results = JSON.stringify(form.results)
-
-  return request(opts)
-    .then(res => {
-      const data = JSON.parse(res.body)
-      if (data.ok) {
-        debug('HTTP request sent with success')
-      }
-    })
-    .catch(err => {
-      debug(err)
-    })
-}
-
-const sendMessage = (chatId: number, text: string) => {
-  const form: SendMessage = {
-    chat_id: chatId,
-    text,
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: 'Add note',
-            callback_data: 'add',
-          },
-        ],
-        [
-          {
-            text: 'Cancel',
-            callback_data: 'cancel',
-          }
-        ],
-      ],
-    },
-    // reply_markup: {
-    //   keyboard: [
-    //     [
-    //       {
-    //         text: 'teste',
-    //       }
-    //     ],
-    //     [
-    //       {
-    //         text: 'dois',
-    //       },
-    //       {
-    //         text: 'quatro',
-    //         request_contact: true
-    //       }
-    //     ]
-    //   ]
-    // }
+bot.on('message', (ctx, next) => {
+  if (ctx.message && ctx.message.reply_to_message) {
+    return ctx.reply(`Note taken: ${ctx.message.text}`)
   }
-  return makeRequest('sendMessage', form)
-}
+  if (next) return next()
+})
 
-const answerCallbackQuery = (cbId: string, text: string) => {
-  const form: AnswerCallbackQuery = {
-    callback_query_id: cbId,
-    text,
+bot.on('document', ctx => 
+  ctx.telegram.getFileLink(ctx.message!.document!.file_id)
+  .then<Response>(fetch)
+  .then(resp => resp.buffer())
+  .then(buffer => (
+    s3.putObject({
+      Bucket: bucket,
+      Key: ctx.message!.document!.file_id,
+      Body: buffer,
+    }).promise()
+  ))
+  .then(() => (
+    s3.getObject({
+      Bucket: bucket,
+      Key: ctx.message!.document!.file_id,
+    }).createReadStream()
+  ))
+  .then(source => ctx.replyWithDocument({ source, filename: ctx.message!.document!.file_name }, { 
+    caption: ctx.message!.document!.file_name,
+   }))
+)
+
+bot.hears(/^ping$/gi, ctx => ctx.reply('pong'))
+
+bot.command('help', ctx => ctx.reply(ctx.message!.text!))
+
+bot.command('add', ctx => ctx.reply(`Ok, I'm ready to take notes`, Markup.forceReply().extra()))
+
+export const handler: APIGatewayProxyHandler = async (event) => {
+  await bot.handleUpdate(JSON.parse(event.body || ''))
+
+  return {
+    statusCode: 200,
+    body: '',
   }
-
-  return makeRequest('answerCallbackQuery', form)
-}
-
-const answerInlineQuery = (iqId: string, results: InlineQueryResult[]) => {
-  const form: AnswerInlineQuery = {
-    inline_query_id: iqId,
-    cache_time: 10,
-    is_personal: true,
-    results,
-  }
-
-  return makeRequest('answerInlineQuery', form)
-}
-
-const handleCallbackQuery = (callbackQuery: CallbackQuery) => {
-  const callbackData = callbackQuery.data
-
-  const resp = (callbackData === 'add' ? 'was added' : 'was ignored')
-
-  if (callbackData === 'add') {
-    if (callbackQuery.message && callbackQuery.message.text) {
-      addNote(callbackQuery.from.id, callbackQuery.message.text)
-    }
-  }
-
-  return answerCallbackQuery(callbackQuery.id, `Your note ${resp}`)
-}
-
-const handleInlineQuery = (inlineQuery: InlineQuery) => {
-  const iqId = inlineQuery.id
-  const results = Object.keys(notes[inlineQuery.from.id] || {})
-    .map(key => ({ key, value: notes[inlineQuery.from.id][key] }))
-    .filter(({ value }) => value.includes(inlineQuery.query.trim()))
-    .map<InlineQueryResult>(({ key, value }) => ({
-      type: 'article',
-      // description: 'description test',
-      id: key,
-      title: value.length > 30 ? `${value.substring(0, 27)}...` : value,
-      input_message_content: {
-        message_text: value,
-      }
-    }))
-  debug('inline results')
-  debug(results)
-  return answerInlineQuery(iqId, results)
-}
-
-const handleTextMessage = (message: Message) => {
-  return sendMessage(message.chat.id, message.text || 'empty_message')
-}
-
-const updateHandler = (update: Update) => {
-  if (update.callback_query) {
-    return handleCallbackQuery(update.callback_query)
-  } else if (update.inline_query) {
-    return handleInlineQuery(update.inline_query)
-  } else if (update.message) {
-    return handleTextMessage(update.message)
-  } else {
-    debug(`Not handled: ${update.update_id}`)
-    return Promise.resolve();
-  }
-}
-
-export const handler: APIGatewayProxyHandler = async (event, context) => {
-  let update = null
-  try {
-    update = JSON.parse(event.body || '') as Update
-  } catch (err) {
-    debug('Could not parse')
-    throw err
-  }
-
-  debug(context.functionName, context.functionVersion)
-
-  await updateHandler(update);
-
-  return ok()
 }

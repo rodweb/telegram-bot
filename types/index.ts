@@ -9,10 +9,10 @@ export * from './callback-query'
 export * from './callback-query-result'
 export * from './reply-markup'
 export * from './update'
+export * from './file'
 
 export * from './methods'
 export * from './inline-query-result-types'
 export * from './input-message-types'
 export * from './message-types'
 export * from './reply-markup-types'
-

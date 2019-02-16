@@ -1,10 +1,14 @@
-import { User, Chat, Location } from './index'
+import {
+  User,
+  Chat,
+  Location,
+  PhotoSize,
+} from './index'
 
 interface MessageEntity {}
 
 interface Audio {}
 interface Document {}
-interface PhotoSize {}
 interface Video {}
 interface Voice {}
 interface Contact {}
@@ -30,7 +34,7 @@ export interface Message {
   document?: Document,
   // animation?: Animation,
   // game?: Game,
-  photo?: Array<PhotoSize>,
+  photo?: PhotoSize[],
   // sticker?: Sticker,
   video?: Video,
   voice?: Voice,
