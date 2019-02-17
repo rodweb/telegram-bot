@@ -84,6 +84,18 @@ bot.on('message', (ctx, next) => {
   if (next) return next()
 })
 
+// import * as tw from 'telegraf-wit'
+// const TelegrafWit = tw.default
+// const wit = new TelegrafWit(process.env.WIT_TOKEN, { apiVersion: '20190216' })
+
+// bot.on('text', (ctx) => {
+//   return wit.getMeaning(ctx.message!.text)
+//     .then((result: any) => {
+//       // reply to user with wit result
+//       return ctx.reply(JSON.stringify(result, null, 2))
+//     })
+// })
+
 const upload = (id: string, url: string) => fetch(url)
   .then(resp => resp.buffer())
   .then(buffer => (
@@ -132,6 +144,12 @@ bot.on('document', ctx =>
 //   return [...acc, curr]
 // }
 
+import { Wit } from 'node-wit'
+
+const client = new Wit({
+  accessToken: process.env.WIT_TOKEN || '',
+})
+
 bot.on('photo', ctx => {
   if (!ctx.message || !ctx.message.photo) return
   debug(ctx.message.photo)
@@ -161,6 +179,36 @@ bot.hears(/^ping$/gi, ctx => ctx.reply('pong'))
 bot.command('help', ctx => ctx.reply(ctx.message!.text!))
 
 bot.command('add', ctx => ctx.reply(`Ok, I'm ready to take notes`, Markup.forceReply().extra()))
+
+// type Entity = 'reminder' | 'datetime'
+type ReminderEntity = { value: string }
+type DatetimeGrain = 'hour' | 'day' | string
+type DatetimeValue = { value: string, grain: DatetimeGrain }
+type DatetimeEntity = { values: DatetimeValue[] }
+interface Entities {
+  [entity: string]: any;
+  reminder: ReminderEntity[]
+  datetime: DatetimeEntity[]
+}
+declare interface MessageResponse {
+  entities: Entities
+}
+
+import * as moment from 'moment'
+
+bot.on('text', ctx =>
+  client.message(ctx.message!.text!, {})
+  .then((resp: MessageResponse) => {
+    if (resp.entities.reminder && resp.entities.reminder.length) {
+      const reminder = resp.entities.reminder[0].value
+      if (resp.entities.datetime && resp.entities.datetime.length) {
+        const at = moment(resp.entities.datetime[0].values[0].value)
+        return ctx
+          .reply(`I will remind you to '${reminder}' ${at.fromNow()}`)
+      }
+    }
+    return ctx.reply(JSON.stringify(resp, null, 2))
+  }))
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   await bot.handleUpdate(JSON.parse(event.body || ''))
