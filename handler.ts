@@ -67,8 +67,8 @@ const debugMiddleware: t.Middleware<t.ContextMessageUpdate> = (ctx, next) => {
 bot.use(debugMiddleware)
 
 bot.use((ctx, next) => {
-  if (ctx.from && ctx.from.username !== 'rodwebr') {
-    return ctx.reply(`I'm not allowed to chat with you :(\nPlease talk to @rodwebr`)
+  if (ctx.from && ctx.from.username !== process.env.TELEGRAM_HANDLE) {
+    return ctx.reply(`I'm not allowed to chat with you :(\nPlease talk to @rodweb`)
   }
   if (next) return next()
 })

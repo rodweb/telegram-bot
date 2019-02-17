@@ -7,18 +7,16 @@ plugins:
   - serverless-offline
   # - serverless-plugin-typescript
 
-custom:
-  bucket: telegram-bot-development
-
 provider:
   name: aws
   runtime: nodejs8.10
   environment:
+    DEBUG: ${env:DEBUG}
     TELEGRAM_TOKEN: ${env:TELEGRAM_TOKEN}
-    DEBUG: "*"
-    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
-    BUCKET: ${self:custom.bucket}
     WIT_TOKEN: ${env:WIT_TOKEN}
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+    BUCKET: ${env:BUCKET}
+    TELEGRAM_HANDLE: ${env:TELEGRAM_HANDLE}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -33,7 +31,7 @@ provider:
       Action:
         - s3:PutObject
         - s3:GetObject
-      Resource: "arn:aws:s3:::${self:custom.bucket}/*"
+      Resource: "arn:aws:s3:::${env:BUCKET}/*"
 functions:
   receive-updates:
     handler: handler.handler
