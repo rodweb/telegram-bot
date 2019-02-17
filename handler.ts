@@ -47,6 +47,7 @@ import { APIGatewayProxyHandler } from 'aws-lambda';
 import * as f from 'node-fetch'
 import { Markup } from 'telegraf';
 import * as d from 'debug'
+// import { PhotoSize } from 'telegraf/typings/telegram-types';
 
 const token = process.env.TELEGRAM_TOKEN || ''
 const bucket = process.env.BUCKET || ''
@@ -58,20 +59,23 @@ const bot = new Telegraf(token)
 const fetch = f.default
 
 const debugMiddleware: t.Middleware<t.ContextMessageUpdate> = (ctx, next) => {
-  if (next) {
-    return next().then(() => {
-      debug(ctx.update)
-    })
-  }
+  debug('debugMiddeware')
+  debug(ctx.update)
+  if (next) return next()
 }
+
 bot.use(debugMiddleware)
 
-bot.use(ctx => {
+bot.use((ctx, next) => {
   if (ctx.from && ctx.from.username !== 'rodwebr') {
     return ctx.reply(`I'm not allowed to chat with you :(\nPlease talk to @rodwebr`)
   }
-  return
+  if (next) return next()
 })
+
+bot.catch(debug)
+
+bot.start(ctx => ctx.reply(`Welcome, ${ctx.from!.first_name}!`))
 
 bot.on('message', (ctx, next) => {
   if (ctx.message && ctx.message.reply_to_message) {
@@ -80,27 +84,77 @@ bot.on('message', (ctx, next) => {
   if (next) return next()
 })
 
-bot.on('document', ctx => 
-  ctx.telegram.getFileLink(ctx.message!.document!.file_id)
-  .then<Response>(fetch)
+const upload = (id: string, url: string) => fetch(url)
   .then(resp => resp.buffer())
   .then(buffer => (
     s3.putObject({
       Bucket: bucket,
-      Key: ctx.message!.document!.file_id,
-      Body: buffer,
-    }).promise()
-  ))
-  .then(() => (
-    s3.getObject({
-      Bucket: bucket,
-      Key: ctx.message!.document!.file_id,
-    }).createReadStream()
-  ))
-  .then(source => ctx.replyWithDocument({ source, filename: ctx.message!.document!.file_name }, { 
-    caption: ctx.message!.document!.file_name,
-   }))
+      Key: id,
+      Body: buffer
+    }).promise())
 )
+
+const download = (id: string) => (
+  s3.getObject({
+    Bucket: bucket,
+    Key: id,
+  }).createReadStream()
+)
+
+bot.on('document', ctx =>
+  ctx.telegram.getFileLink(ctx.message!.document!.file_id)
+    .then<Response>(fetch)
+    .then(resp => resp.buffer())
+    .then(buffer => (
+      s3.putObject({
+        Bucket: bucket,
+        Key: ctx.message!.document!.file_id,
+        Body: buffer,
+      }).promise()
+    ))
+    .then(() => (
+      s3.getObject({
+        Bucket: bucket,
+        Key: ctx.message!.document!.file_id,
+      }).createReadStream()
+    ))
+    .then(source => ctx.replyWithDocument({ source, filename: ctx.message!.document!.file_name }, {
+      caption: ctx.message!.document!.file_name,
+    }))
+)
+
+// const biggerPhotos = (acc: PhotoSize[], curr: PhotoSize) => {
+//   const found = acc.find(x => x.file_id === curr.file_id)
+//   if (found) {
+//     if (found.width < curr.width)
+//       return [...acc.filter(x => x.file_id !== curr.file_id), curr]
+//   }
+//   return [...acc, curr]
+// }
+
+bot.on('photo', ctx => {
+  if (!ctx.message || !ctx.message.photo) return
+  debug(ctx.message.photo)
+  const ids = ctx.message.photo
+    .filter(photo => photo.height === 1280 || photo.width === 1280)
+    // .reduce(biggerPhotos, [])
+    .map(photo => photo.file_id)
+  return Promise.all(ctx.message.photo
+    .filter(photo => photo.height === 1280 || photo.width === 1280)
+    .map(photo => ctx.telegram.getFileLink(photo.file_id)))
+    .then(urls =>
+      Promise.all(Array.from(ids.keys())
+        .map(i => upload(ids[i], urls[i])))
+    )
+    .then(() =>
+      Promise.all(Array.from(ids.keys())
+        .map(i => download(ids[i])))
+    )
+    .then(sources =>
+      Promise.all(sources
+        .map(source => ctx.replyWithPhoto({ source })))
+    )
+})
 
 bot.hears(/^ping$/gi, ctx => ctx.reply('pong'))
 
