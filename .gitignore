@@ -17,3 +17,4 @@ tags
 
 # Env
 env.sh
+.env

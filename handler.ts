@@ -48,6 +48,31 @@ import * as f from 'node-fetch'
 import { Markup } from 'telegraf';
 import * as d from 'debug'
 // import { PhotoSize } from 'telegraf/typings/telegram-types';
+//
+import axios from 'axios';
+
+interface Activity {
+    activity: string
+    type: string
+}
+const boredUrl = 'http://www.boredapi.com/api/activity/';
+const bored = {
+    random: async () => {
+        const result = await axios.get<Activity>(boredUrl);
+        if (result.status === 200) {
+            return result.data
+        }
+        return { activity: 'failed', type: 'failed' }
+    }
+}
+
+const apiFlashUrl = 'https://api.apiflash.com/v1/urltoimage'
+const apiFlash = {
+    url: async (url: string) => {
+        const result = await axios.get(`${apiFlashUrl}?access_key=${process.env.APIFLASH_TOKEN}&url=${url}`, { responseType: 'stream' });
+        return result.data;
+    }
+}
 
 const token = process.env.TELEGRAM_TOKEN || ''
 const bucket = process.env.BUCKET || ''
@@ -174,11 +199,16 @@ bot.on('photo', ctx => {
     )
 })
 
+bot.hears(/^http/gi, ctx => apiFlash.url(ctx.message!.text!)
+    .then(source => ctx.replyWithPhoto({ source })))
+
 bot.hears(/^ping$/gi, ctx => ctx.reply('pong'))
 
 bot.command('help', ctx => ctx.reply(ctx.message!.text!))
 
 bot.command('add', ctx => ctx.reply(`Ok, I'm ready to take notes`, Markup.forceReply().extra()))
+
+bot.command('bored', ctx => bored.random().then(res => ctx.reply(res.activity)))
 
 // type Entity = 'reminder' | 'datetime'
 type ReminderEntity = { value: string }
