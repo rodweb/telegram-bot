@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "aws-sdk": "^2.401.0",
-    "axios": "^0.18.0",
+    "axios": "^0.18.1",
     "debug": "^4.1.1",
     "moment": "^2.24.0",
     "node-fetch": "^2.3.0",
